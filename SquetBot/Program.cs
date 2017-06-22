@@ -20,6 +20,9 @@ namespace SquetBot
     {
         static void Main(string[] args) => new Program().Run();
 
+        string token;
+
+        static bool isPlaying;
         private static DiscordClient _client;
 
         static void DownloadYoutubeAudio(string link)
@@ -51,7 +54,7 @@ namespace SquetBot
             }
         }
 
-        public static async Task SendAudio(string filePath, IAudioClient _vClient)
+        public static void SendAudio(string filePath, IAudioClient _vClient)
         {
 
             // Simple try and catch.
@@ -77,7 +80,7 @@ namespace SquetBot
                     // libsodium.dll
                     // ^^^^^^^^^^^^^^^
                     // If you do not have these, this will not work.
-                    while ((byteCount = resampler.Read(buffer, 0, blockSize)) > 0) // Read audio into our buffer, and keep a loop open while data is present
+                    while ((byteCount = resampler.Read(buffer, 0, blockSize)) > 0 & isPlaying) // Read audio into our buffer, and keep a loop open while data is present
                     {
                         if (byteCount < blockSize)
                         {
@@ -88,7 +91,6 @@ namespace SquetBot
 
                         _vClient.Send(buffer, 0, blockSize); // Send the buffer to Discord
                     }
-                    await _vClient.Disconnect();
                 }
             }
             catch
@@ -99,6 +101,11 @@ namespace SquetBot
 
         public void Run()
         {
+            Console.WriteLine("Enter bot secret: ");
+            token = Console.ReadLine();
+
+            Console.Clear();
+
             _client = new DiscordClient();
             _client.UsingCommands(x =>
             {
@@ -113,18 +120,13 @@ namespace SquetBot
             _client.Log.Message += (s, e) => Console.WriteLine($"[{e.Severity}] {e.Source}: {e.Message}");
 
             _client.ExecuteAndWait(async () => {
-                await _client.Connect("MzI2NDczNjE1MzU4ODIwMzUz.DCnT6A.kebsUqPxZvdgSy7YT4Zw8l1CMvE", TokenType.Bot);
+                await _client.Connect(token, TokenType.Bot);
                 await Task.Delay(2000);
 
                 var voiceChannel = _client.Servers.FirstOrDefault().VoiceChannels.ToArray()[1];
 
                 var _vClient = await _client.GetService<AudioService>() // We use GetService to find the AudioService that we installed earlier. In previous versions, this was equivelent to _client.Audio()
                         .Join(voiceChannel); // Join the Voice Channel, and return the IAudioClient.
-
-                await Task.Delay(2000);
-
-                
-                //await SendAudio("c:\\users\\pugki\\desktop\\Chick_Willis_-_Nuts_For_Sale_hot_nuts.mp3", _vClient);
 
                 _client.GetService<CommandService>().CreateCommand("greet")
                     .Alias(new string[] { "gr", "hi" })
@@ -135,15 +137,27 @@ namespace SquetBot
                         await e.Channel.SendMessage($"{e.User.Name} greets {e.GetArg("GreetedPerson")}");
                     });
 
-                _client.GetService<CommandService>().CreateCommand("jukebox")
-                    .Alias(new string[] { "jukebox" })
-                    .Description("Play some dank tunes")
-                    .Parameter("link", ParameterType.Required)
-                    .Do(async e =>
-                    {
-                        DownloadYoutubeAudio(e.GetArg("link"));
-                        await SendAudio("temp.mp3", _vClient);
-                    });
+                _client.GetService<CommandService>().CreateGroup("jukebox", cgb =>
+                {
+                    cgb.CreateCommand("play")
+                        .Description("Play some dank tunes")
+                        .Parameter("link", ParameterType.Required)
+                        .Do(async  e =>
+                        {
+                            isPlaying = false;
+                            await Task.Delay(500);
+                            DownloadYoutubeAudio(e.GetArg("link"));
+                            isPlaying = true;
+                            Task.Run(() => SendAudio("temp.mp3", _vClient));
+                        });
+                    cgb.CreateCommand("stop")
+                        .Description("Stop the dank tunes")
+                        .Do(e =>
+                        {
+                            isPlaying = false;
+                        });
+                });
+                
 
                 _client.GetService<CommandService>().CreateCommand("disconnect")
                     .Alias(new string[] { "dc" })
