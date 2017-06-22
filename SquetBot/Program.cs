@@ -139,10 +139,10 @@ namespace SquetBot
                     .Alias(new string[] { "jukebox" })
                     .Description("Play some dank tunes")
                     .Parameter("link", ParameterType.Required)
-                    .Do(e =>
+                    .Do(async e =>
                     {
                         DownloadYoutubeAudio(e.GetArg("link"));
-                        SendAudio("temp.mp3", _vClient);
+                        await SendAudio("temp.mp3", _vClient);
                     });
 
                 _client.GetService<CommandService>().CreateCommand("disconnect")
